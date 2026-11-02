@@ -59,75 +59,168 @@ async function start() {
   $$(".mgr").forEach(el => el.classList.toggle("hidden", !mgr));
   $$(".adm").forEach(el => el.classList.toggle("hidden", ME.type !== "Admin"));
   $("#who").textContent = `${ME.name} (${ME.type})`;
-  fillEntryForm();
+  fillFilters();
   show("#v-app");
   go("log");
 }
 
-function go(view) {
+function go(view, keepDay) {
   $$("#nav button").forEach(b => b.classList.toggle("active", b.dataset.view === view));
   $("#p-log").classList.toggle("hidden", view !== "log");
   $("#p-entries").classList.toggle("hidden", view !== "mine" && view !== "team");
   $("#p-admin").classList.toggle("hidden", view !== "admin");
   if (view === "mine" || view === "team") { entriesScope = view; $("#entries-title").textContent = view === "mine" ? "My entries" : "Team entries"; loadEntries(); }
   if (view === "admin") adminTab("users");
+  if (view === "log" && !keepDay) { dayCtx = null; dayRows = []; loadDay($("#day-date").value || todayStr()); }
 }
-$$("#nav button").forEach(b => b.onclick = () => go(b.dataset.view));
+$$("#nav button").forEach(b => b.onclick = () => {
+  if (typeof dirtyCount === "function" && dirtyCount() && !confirm("You have unsaved rows. Discard them?")) return;
+  dayRows = []; go(b.dataset.view);
+});
 
-/* ---------- Log time ---------- */
-function fillEntryForm() {
-  const f = $("#f-entry"), L = META.lists;
-  options(f.clientId, META.clients.map(c => ({ value: c.id, label: c.name })), { blank: META.clients.length ? "Select client" : "No clients assigned yet" });
-  options(f.recurring, L["Recurring/Adhoc"] || []);
-  options(f.activity, L["Activity"] || [], { blank: "Select activity" });
-  options(f.subActivity, L["Sub Activity"] || [], { blank: "" });
-  options(f.status, L["Status"] || []);
-  f.status.value = (L["Status"] || []).includes("Done") ? "Done" : f.status.value;
-  fillProjects();
-  f.date.value = todayStr();
+/* ---------- Log time: one day as a table ---------- */
+let dayRows = [], dayCtx = null;
+const isMgr = () => ME && (ME.type === "Admin" || ME.type === "Lead");
+const FIELDS = ["clientId", "projectId", "recurring", "activity", "subActivity", "description", "estHrs", "actualHrs", "effectiveHrs", "billedHrs", "status"];
+const defStatus = () => { const s = META.lists["Status"] || []; return s.includes("Done") ? "Done" : (s[0] || ""); };
+const blankRow = () => ({ _new: true, clientId: META.clients.length === 1 ? META.clients[0].id : "", projectId: "",
+  recurring: (META.lists["Recurring/Adhoc"] || [""])[0], activity: "", subActivity: "", description: "",
+  estHrs: "", actualHrs: "", effectiveHrs: "", billedHrs: "", status: defStatus() });
+const isBlank = r => !r.description && !r.actualHrs && !r.activity;
+function fromEntry(x) {
+  const p = META.projects.find(p => p.clientId === x.clientId && p.name === x.project);
+  return { ...x, projectId: p ? p.id : "", _new: false, _dirty: false };
+}
+const dirtyCount = () => dayRows.filter(r => r._new ? !isBlank(r) : r._dirty).length;
+
+function fillFilters() {
   options($("#fl-client"), META.clients.map(c => ({ value: c.id, label: c.name })), { blank: "All clients" });
 }
-function fillProjects() {
-  const f = $("#f-entry");
-  const ps = META.projects.filter(p => p.clientId === f.clientId.value);
-  options(f.projectId, ps.map(p => ({ value: p.id, label: p.name })), { blank: ps.length ? "Select project" : "No project" });
-}
-$("#f-entry").clientId.addEventListener("change", fillProjects);
-$("#f-entry").projectId.addEventListener("change", e => {
-  const p = META.projects.find(p => p.id === e.target.value);
-  if (p && p.type) $("#f-entry").recurring.value = p.type;
-});
 
-$("#f-entry").addEventListener("submit", e => {
-  e.preventDefault();
-  const f = e.target, d = Object.fromEntries(new FormData(f));
-  busy($("#entry-save"), async () => {
-    if (editing) { await api("updateEntry", { ...d, entryId: editing.entryId, clientId: editing.clientId }); toast("Entry updated"); endEdit(); go(entriesScope); }
-    else {
-      await api("addEntry", d); toast("Entry saved");
-      ["description", "estHrs", "actualHrs", "effectiveHrs", "billedHrs"].forEach(n => f[n].value = "");
-    }
+async function loadDay(date, preset) {
+  if (!preset && dirtyCount() && !confirm("You have unsaved rows. Discard them?")) { $("#day-date").value = dayRows._date || date; return; }
+  $("#day-date").value = date;
+  dayCtx = preset ? preset.ctx : null;
+  const other = dayCtx && dayCtx.user !== ME.name;
+  $("#log-title").textContent = other ? `Entries of ${dayCtx.user}` : "Log time";
+  $("#row-add").hidden = !!other;
+  $("#day-back").hidden = !dayCtx;
+  ["#day-prev", "#day-next", "#day-today", "#day-date"].forEach(s => $(s).disabled = !!dayCtx);
+  if (preset) { dayRows = preset.rows.map(fromEntry); }
+  else {
+    $("#t-day").innerHTML = `<tr><td class="empty">Loading…</td></tr>`;
+    try { dayRows = (await api("listEntries", { scope: "mine", from: date, to: date })).map(fromEntry); }
+    catch (e) { toast(e.message, false); dayRows = []; }
+    const blanks = dayRows.length ? 2 : 4;
+    for (let i = 0; i < blanks; i++) dayRows.push(blankRow());
+  }
+  dayRows._date = date;
+  renderDay();
+}
+
+function cellSelect(i, k, items, val, blank, disabled) {
+  const opts = (blank !== undefined ? `<option value="">${esc(blank)}</option>` : "") +
+    items.map(o => { const v = typeof o === "object" ? o.value : o, l = typeof o === "object" ? o.label : o;
+      return `<option value="${esc(v)}"${String(v) === String(val ?? "") ? " selected" : ""}>${esc(l)}</option>`; }).join("");
+  return `<select data-i="${i}" data-k="${k}"${disabled ? " disabled" : ""}>${opts}</select>`;
+}
+const cellNum = (i, k, v, ph = "") => `<td class="c-num"><input type="number" step="0.01" min="0" data-i="${i}" data-k="${k}" value="${esc(v)}" placeholder="${ph}"></td>`;
+
+function renderDay() {
+  const L = META.lists, mgr = isMgr();
+  const clients = META.clients.map(c => ({ value: c.id, label: c.name }));
+  let html = `<tr><th>#</th><th>Client</th><th>Project</th><th>Rec / Adhoc</th><th>Activity</th><th>Sub activity</th><th>Description</th>
+    <th>Est hrs</th><th>Actual hrs</th>${mgr ? "<th>Effective</th><th>Billed</th>" : ""}<th>Status</th><th></th></tr>`;
+  dayRows.forEach((r, i) => {
+    const ps = META.projects.filter(p => p.clientId === r.clientId).map(p => ({ value: p.id, label: p.name }));
+    const cls = r._dirty || (r._new && !isBlank(r)) ? "dirty" : (!r._new ? "saved" : "");
+    html += `<tr class="${cls}"><td class="rownum">${i + 1}</td>
+      <td>${cellSelect(i, "clientId", clients, r.clientId, "Client…", !r._new)}</td>
+      <td>${cellSelect(i, "projectId", ps, r.projectId, ps.length ? "Project…" : "—")}</td>
+      <td>${cellSelect(i, "recurring", L["Recurring/Adhoc"] || [], r.recurring)}</td>
+      <td>${cellSelect(i, "activity", L["Activity"] || [], r.activity, "Activity…")}</td>
+      <td>${cellSelect(i, "subActivity", L["Sub Activity"] || [], r.subActivity, "")}</td>
+      <td class="c-desc"><textarea rows="1" data-i="${i}" data-k="description" placeholder="What did you do?">${esc(r.description)}</textarea></td>
+      ${cellNum(i, "estHrs", r.estHrs)}${cellNum(i, "actualHrs", r.actualHrs)}
+      ${mgr ? cellNum(i, "effectiveHrs", r.effectiveHrs, "= actual") + cellNum(i, "billedHrs", r.billedHrs) : ""}
+      <td>${cellSelect(i, "status", L["Status"] || [], r.status)}</td>
+      <td><button class="x" data-del="${i}" title="Delete row">&times;</button></td></tr>`;
   });
+  $("#t-day").innerHTML = html;
+  updateDayTotal();
+}
+
+function updateDayTotal() {
+  const total = dayRows.reduce((s, r) => s + (Number(r.actualHrs) || 0), 0);
+  $("#day-total").textContent = `${total.toFixed(2)} hrs`;
+  const n = dirtyCount();
+  $("#day-note").textContent = n ? `${n} unsaved row${n > 1 ? "s" : ""}` : "";
+}
+
+function onCell(e) {
+  const el = e.target; if (el.dataset.i === undefined) return;
+  const r = dayRows[el.dataset.i], k = el.dataset.k;
+  r[k] = el.value; r._dirty = true;
+  if (k === "clientId") { r.projectId = ""; renderDay(); return; }
+  if (k === "projectId") { const p = META.projects.find(p => p.id === el.value); if (p && p.type) { r.recurring = p.type; renderDay(); return; } }
+  const tr = el.closest("tr"); if (!tr.classList.contains("dirty")) { tr.classList.remove("saved"); tr.classList.add("dirty"); }
+  updateDayTotal();
+}
+$("#t-day").addEventListener("input", onCell);
+$("#t-day").addEventListener("change", e => { if (e.target.tagName === "SELECT") onCell(e); });
+$("#t-day").addEventListener("keydown", e => {
+  // Enter in the last row's description adds a new row
+  if (e.key === "Enter" && !e.shiftKey && e.target.dataset.k === "description" && Number(e.target.dataset.i) === dayRows.length - 1 && !$("#row-add").hidden) {
+    e.preventDefault(); addRow();
+  }
+});
+$("#t-day").addEventListener("click", e => {
+  const b = e.target.closest("button[data-del]"); if (!b) return;
+  const i = Number(b.dataset.del), r = dayRows[i];
+  if (r._new) { dayRows.splice(i, 1); if (!dayRows.length) dayRows.push(blankRow()); renderDay(); return; }
+  if (!confirm(`Delete this saved entry?\n${r.clientName || ""} · ${r.description}`)) return;
+  busy(b, async () => { await api("deleteEntry", { entryId: r.entryId, clientId: r.clientId }); dayRows.splice(i, 1); renderDay(); toast("Entry deleted"); });
 });
 
-function startEdit(en) {
-  editing = en; const f = $("#f-entry");
-  go("log");
-  $("#log-title").textContent = `Edit entry · ${en.clientName}`;
-  f.clientId.value = en.clientId; f.clientId.disabled = true; fillProjects();
-  const p = META.projects.find(p => p.clientId === en.clientId && p.name === en.project);
-  f.projectId.value = p ? p.id : "";
-  ["date", "recurring", "activity", "subActivity", "description", "estHrs", "actualHrs", "effectiveHrs", "billedHrs", "status"]
-    .forEach(n => { if (f[n]) f[n].value = en[n] ?? ""; });
-  $("#entry-save").textContent = "Save changes"; $("#entry-cancel").hidden = false;
+function addRow() {
+  const last = dayRows[dayRows.length - 1], n = blankRow();
+  if (last && last.clientId) { n.clientId = last.clientId; n.projectId = last.projectId; n.recurring = last.recurring; }
+  dayRows.push(n); renderDay();
+  const ta = $$(`#t-day textarea`).pop(); if (ta) ta.focus();
 }
-function endEdit() {
-  editing = null; const f = $("#f-entry");
-  f.clientId.disabled = false; $("#log-title").textContent = "Log time";
-  $("#entry-save").textContent = "Save entry"; $("#entry-cancel").hidden = true;
-  f.reset(); fillEntryForm();
+$("#row-add").onclick = addRow;
+
+$("#day-save").onclick = () => busy($("#day-save"), async () => {
+  const date = $("#day-date").value;
+  const todo = dayRows.map((r, i) => ({ r, i })).filter(({ r }) => r._new ? !isBlank(r) : r._dirty);
+  if (!todo.length) return toast("Nothing to save");
+  for (const { r, i } of todo) {
+    const miss = [!r.clientId && "client", !r.activity && "activity", !r.description && "description", !(Number(r.actualHrs) > 0) && "actual hrs"].filter(Boolean);
+    if (miss.length) throw new Error(`Row ${i + 1}: add ${miss.join(", ")}`);
+  }
+  const pick = r => Object.fromEntries(FIELDS.map(k => [k, r[k] ?? ""]));
+  const res = await Promise.allSettled(todo.map(({ r }) => r._new
+    ? api("addEntry", { ...pick(r), date })
+    : api("updateEntry", { ...pick(r), date: r.date || date, entryId: r.entryId })));
+  const failed = res.map((x, j) => x.status === "rejected" ? `Row ${todo[j].i + 1}: ${x.reason.message}` : null).filter(Boolean);
+  res.forEach((x, j) => { if (x.status === "fulfilled") { const r = todo[j].r; r._dirty = false; if (r._new) { r._new = false; r.entryId = x.value.entryId; } } });
+  if (failed.length) { renderDay(); throw new Error(failed.join(" | ")); }
+  toast(`${todo.length} row${todo.length > 1 ? "s" : ""} saved`);
+  if (dayCtx) { dayCtx = null; go(entriesScope); } else { dayRows = []; loadDay(date); }
+});
+
+$("#day-date").addEventListener("change", e => loadDay(e.target.value));
+$("#day-prev").onclick = () => loadDay(addDays($("#day-date").value, -1));
+$("#day-next").onclick = () => loadDay(addDays($("#day-date").value, 1));
+$("#day-today").onclick = () => loadDay(todayStr());
+$("#day-back").onclick = () => { if (dirtyCount() && !confirm("Discard unsaved changes?")) return; dayRows = []; dayCtx = null; go(entriesScope); };
+window.addEventListener("beforeunload", e => { if (dirtyCount()) { e.preventDefault(); e.returnValue = ""; } });
+
+function startEdit(x) {
+  const rows = lastEntries.filter(e => e.date === x.date && e.user === x.user);
+  go("log", true);
+  loadDay(x.date, { rows, ctx: { user: x.user } });
 }
-$("#entry-cancel").onclick = () => { endEdit(); go(entriesScope); };
 
 /* ---------- Entries ---------- */
 $("#fl-to").value = todayStr(); $("#fl-from").value = addDays(todayStr(), -30);
@@ -238,7 +331,7 @@ $("#f-admin").addEventListener("submit", e => {
   busy($("button[type=submit]", e.target), async () => {
     await api(cfg.save, { [cfg.key]: d, isNew: !admEdit });
     toast(admEdit ? "Saved" : "Added");
-    if (admTab === "clients" || admTab === "projects" || admTab === "assign") META = await api("getMeta").catch(() => META), fillEntryForm();
+    if (admTab === "clients" || admTab === "projects" || admTab === "assign") META = await api("getMeta").catch(() => META), fillFilters();
     adminTab(admTab);
   });
 });
@@ -259,7 +352,7 @@ function renderAdminTable() {
     const r = rows[b.dataset.ed ?? b.dataset.rm];
     if (b.dataset.ed !== undefined) { admEdit = cfg.id(r); renderAdminForm(cfg.fromRow(r)); window.scrollTo({ top: 0, behavior: "smooth" }); }
     if (b.dataset.rm !== undefined && confirm("Remove this assignment?"))
-      busy(b, async () => { await api("deleteAssignment", { assignmentId: r["Assignment ID"] }); toast("Removed"); META = await api("getMeta"); fillEntryForm(); adminTab("assign"); });
+      busy(b, async () => { await api("deleteAssignment", { assignmentId: r["Assignment ID"] }); toast("Removed"); META = await api("getMeta"); fillFilters(); adminTab("assign"); });
   };
 }
 
