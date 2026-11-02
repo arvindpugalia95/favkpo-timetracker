@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FAVKPO Time Tracker</title>
+<link rel="icon" href="assets/logo.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="toast" role="status"></div>
+
+<!-- Login -->
+<section id="v-login" class="auth hidden">
+  <form class="auth-card" id="f-login">
+    <img src="assets/logo.svg" alt="FAVKPO Management" class="auth-logo">
+    <h1>Time Tracker</h1>
+    <label>User ID<input name="userId" autocomplete="username" required></label>
+    <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
+    <button class="btn primary" type="submit">Log in</button>
+  </form>
+</section>
+
+<!-- Change password -->
+<section id="v-pass" class="auth hidden">
+  <form class="auth-card" id="f-pass">
+    <img src="assets/logo.svg" alt="FAVKPO Management" class="auth-logo">
+    <h1>Set a new password</h1>
+    <p class="muted" id="pass-note">Choose a password only you know. At least 6 characters.</p>
+    <label>Current password<input name="oldPassword" type="password" required></label>
+    <label>New password<input name="newPassword" type="password" minlength="6" required></label>
+    <label>Repeat new password<input name="repeat" type="password" minlength="6" required></label>
+    <button class="btn primary" type="submit">Save password</button>
+    <button class="btn link" type="button" id="pass-cancel">Cancel</button>
+  </form>
+</section>
+
+<!-- App -->
+<div id="v-app" class="hidden">
+  <header class="topbar">
+    <div class="brand"><img src="assets/logo.svg" alt=""><span>Time Tracker</span></div>
+    <nav id="nav">
+      <button data-view="log" class="active">Log time</button>
+      <button data-view="mine">My entries</button>
+      <button data-view="team" class="mgr">Team entries</button>
+      <button data-view="admin" class="adm">Admin</button>
+    </nav>
+    <div class="who"><span id="who"></span>
+      <button class="btn link" id="btn-pass">Change password</button>
+      <button class="btn link" id="btn-logout">Log out</button></div>
+  </header>
+
+  <main>
+    <!-- Log time -->
+    <section id="p-log" class="page">
+      <h2 id="log-title">Log time</h2>
+      <form id="f-entry" class="grid">
+        <label>Date<input type="date" name="date" required></label>
+        <label>Client<select name="clientId" required></select></label>
+        <label>Project<select name="projectId"></select></label>
+        <label>Recurring / Adhoc<select name="recurring"></select></label>
+        <label>Activity<select name="activity" required></select></label>
+        <label>Sub activity<select name="subActivity"></select></label>
+        <label class="wide">Description<textarea name="description" rows="2" required></textarea></label>
+        <label>Est hrs<input type="number" name="estHrs" step="0.01" min="0"></label>
+        <label>Actual hrs<input type="number" name="actualHrs" step="0.01" min="0.01" max="24" required></label>
+        <label class="mgr">Effective hrs<input type="number" name="effectiveHrs" step="0.01" min="0" placeholder="Same as actual"></label>
+        <label class="mgr">Billed hrs<input type="number" name="billedHrs" step="0.01" min="0"></label>
+        <label>Status<select name="status"></select></label>
+        <div class="actions wide">
+          <button class="btn primary" type="submit" id="entry-save">Save entry</button>
+          <button class="btn" type="button" id="entry-cancel" hidden>Cancel edit</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- Entries (mine / team) -->
+    <section id="p-entries" class="page hidden">
+      <h2 id="entries-title">My entries</h2>
+      <div class="filters">
+        <label>From<input type="date" id="fl-from"></label>
+        <label>To<input type="date" id="fl-to"></label>
+        <label>Client<select id="fl-client"></select></label>
+        <button class="btn" id="fl-go">Show</button>
+        <span class="total" id="fl-total"></span>
+      </div>
+      <div class="table-wrap"><table id="t-entries"></table></div>
+    </section>
+
+    <!-- Admin -->
+    <section id="p-admin" class="page hidden">
+      <h2>Admin</h2>
+      <div class="subnav" id="adm-nav">
+        <button data-a="users" class="active">Users</button>
+        <button data-a="clients">Clients</button>
+        <button data-a="projects">Projects</button>
+        <button data-a="assign">Assignments</button>
+      </div>
+      <form id="f-admin" class="grid"></form>
+      <div class="table-wrap"><table id="t-admin"></table></div>
+    </section>
+  </main>
+</div>
+
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
