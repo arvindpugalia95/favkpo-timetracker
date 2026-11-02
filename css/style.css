@@ -49,5 +49,19 @@ tr:nth-child(even) td{background:#F8FAFD} td.num{text-align:right} td.nowrap{whi
   color:#fff;font-weight:500;z-index:9;display:none;max-width:90vw}
 #toast.ok{background:var(--green);display:block} #toast.err{background:var(--danger);display:block}
 
+.day-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.day-head h2{margin:0 12px 0 0}
+.day-actions{margin-top:14px;align-items:center}
+table.sheet{min-width:1100px}
+table.sheet th{font-size:13px;padding:7px 6px}
+table.sheet td{padding:3px 3px;border-bottom:1px solid var(--line)}
+table.sheet input,table.sheet select,table.sheet textarea{width:100%;font-size:14px;padding:6px;border-color:transparent;background:transparent;border-radius:4px}
+table.sheet input:hover,table.sheet select:hover,table.sheet textarea:hover{border-color:var(--line)}
+table.sheet textarea{resize:vertical;min-height:34px;font-family:inherit}
+table.sheet td.c-desc{min-width:240px} table.sheet td.c-num{width:76px} table.sheet td.c-num input{text-align:right}
+table.sheet tr.dirty td{background:#FFF8E1} table.sheet tr.saved td:first-child{box-shadow:inset 3px 0 var(--green)}
+table.sheet tr.dirty td:first-child{box-shadow:inset 3px 0 #E8A317}
+table.sheet .rownum{color:var(--muted);font-size:12px;text-align:center;width:28px}
+.x{border:0;background:none;color:var(--muted);font-size:18px;cursor:pointer;padding:2px 6px} .x:hover{color:var(--danger)}
 @media (max-width:800px){.grid{grid-template-columns:1fr 1fr} nav{order:3;width:100%;overflow-x:auto}}
 @media (max-width:480px){.grid{grid-template-columns:1fr}}

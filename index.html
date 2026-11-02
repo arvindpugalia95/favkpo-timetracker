@@ -53,27 +53,23 @@
   </header>
 
   <main>
-    <!-- Log time -->
+    <!-- Log time: one day as a table -->
     <section id="p-log" class="page">
-      <h2 id="log-title">Log time</h2>
-      <form id="f-entry" class="grid">
-        <label>Date<input type="date" name="date" required></label>
-        <label>Client<select name="clientId" required></select></label>
-        <label>Project<select name="projectId"></select></label>
-        <label>Recurring / Adhoc<select name="recurring"></select></label>
-        <label>Activity<select name="activity" required></select></label>
-        <label>Sub activity<select name="subActivity"></select></label>
-        <label class="wide">Description<textarea name="description" rows="2" required></textarea></label>
-        <label>Est hrs<input type="number" name="estHrs" step="0.01" min="0"></label>
-        <label>Actual hrs<input type="number" name="actualHrs" step="0.01" min="0.01" max="24" required></label>
-        <label class="mgr">Effective hrs<input type="number" name="effectiveHrs" step="0.01" min="0" placeholder="Same as actual"></label>
-        <label class="mgr">Billed hrs<input type="number" name="billedHrs" step="0.01" min="0"></label>
-        <label>Status<select name="status"></select></label>
-        <div class="actions wide">
-          <button class="btn primary" type="submit" id="entry-save">Save entry</button>
-          <button class="btn" type="button" id="entry-cancel" hidden>Cancel edit</button>
-        </div>
-      </form>
+      <div class="day-head">
+        <h2 id="log-title">Log time</h2>
+        <button class="btn small" id="day-prev" title="Previous day">&#8249;</button>
+        <input type="date" id="day-date" aria-label="Date">
+        <button class="btn small" id="day-next" title="Next day">&#8250;</button>
+        <button class="btn link" id="day-today">Today</button>
+        <span class="total" id="day-total"></span>
+      </div>
+      <div class="table-wrap"><table id="t-day" class="sheet"></table></div>
+      <div class="actions day-actions">
+        <button class="btn" id="row-add">Add row</button>
+        <button class="btn primary" id="day-save">Save all</button>
+        <button class="btn" id="day-back" hidden>Back to list</button>
+        <span class="muted" id="day-note"></span>
+      </div>
     </section>
 
     <!-- Entries (mine / team) -->
